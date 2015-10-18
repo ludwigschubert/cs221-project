@@ -16,6 +16,9 @@ DEBUG_VERBOSITY = 3
 DEFAULT_TRAINING_NUM = 100
 DEFAULT_TESTING_NUM  = 100
 
+ETA = 0.05
+NUM_ITERS = 20
+
 def extractWordFeatures(x):
     """
     Taken from sentiment homework.
@@ -47,8 +50,8 @@ def learnPredictor(trainExamples, testExamples, featureExtractor):
     numIters refers to a variable you need to declare. It is not passed in.
     '''
     weights = {}  # feature => weight
-    eta = .05
-    numIters = 20
+    eta = ETA
+    numIters = NUM_ITERS
     useWordFeatures = False # when false, use character features
     def predictor(string):
         dp = dotProduct(featureExtractor(string),weights)
@@ -57,7 +60,7 @@ def learnPredictor(trainExamples, testExamples, featureExtractor):
         else:
             return -1
     for i in range(1,numIters+1):
-        for string, y in trainExamples:
+        for _, string, y in trainExamples:
             phi = featureExtractor(string);
             if (dotProduct(weights, phi)*y < 1):
                 grad = {}
