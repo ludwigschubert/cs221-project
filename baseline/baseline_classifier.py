@@ -78,16 +78,16 @@ def getReadmes(num):
 	We want to return a list of lists [[id, readme_text, stars, ...], [id, readme_text, stars, ...], ...]
 	'''
 	try:
-	    conn=psycopg2.connect("dbname='foo' user='dbuser' password='mypass'")
+	    conn=psycopg2.connect("dbname='data-collector_development'") # user='dbuser' password='mypass'")
 	except:
 	    print "I am unable to connect to the database."
 
 	cur = conn.cursor()
 	try:
 		#TODO: do we want a specific subset? Will this be repeatable?
-	    cur.execute('SELECT id, readme_text, star from bar LIMIT {}'.format(num))
+	    cur.execute('SELECT id, readme_html, stargazers_count from repositories LIMIT {}'.format(num))
 	except:
-	    print "I can't SELECT from bar"
+	    print "I can't SELECT from repositories"
 
 	rows = cur.fetchall()
 
