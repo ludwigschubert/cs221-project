@@ -68,96 +68,96 @@ def learnPredictor(trainExamples, testExamples, featureExtractor):
         print 'Testing error on iteration {0:g}:  {1:f}'.format(i, evaluatePredictor(testExamples,  predictor))
     return weights
 
-    def getReadmes(num):
-    	'''
-    	Make connection to postgres server and get num readme entries
+def getReadmes(num):
+	'''
+	Make connection to postgres server and get num readme entries
 
-    	We want to return a list of lists [[id, readme_text, stars, ...], [id, readme_text, stars, ...], ...]
-    	'''
-    	try:
-		    conn=psycopg2.connect("dbname='foo' user='dbuser' password='mypass'")
-		except:
-		    print "I am unable to connect to the database."
+	We want to return a list of lists [[id, readme_text, stars, ...], [id, readme_text, stars, ...], ...]
+	'''
+	try:
+	    conn=psycopg2.connect("dbname='foo' user='dbuser' password='mypass'")
+	except:
+	    print "I am unable to connect to the database."
 
-		cur = conn.cursor()
-		try:
-			#TODO: do we want a specific subset? Will this be repeatable?
-		    cur.execute('SELECT id, readme_text, star from bar LIMIT {}'.format(num))
-		except:
-		    print "I can't SELECT from bar"
+	cur = conn.cursor()
+	try:
+		#TODO: do we want a specific subset? Will this be repeatable?
+	    cur.execute('SELECT id, readme_text, star from bar LIMIT {}'.format(num))
+	except:
+	    print "I can't SELECT from bar"
 
-		rows = cur.fetchall()
+	rows = cur.fetchall()
 
-		if (DEBUG_VERBOSITY > 2):
-			print "\nRows: \n"
-			for row in rows:
-			    print "   ", row[1]
+	if (DEBUG_VERBOSITY > 2):
+		print "\nRows: \n"
+		for row in rows:
+		    print "   ", row[1]
 
-		return rows # should be in correct form
+	return rows # should be in correct form
 
-	def getRandomSample(ntrain, ntest):
-		'''
-		Get a bunch of data from db.
-		Randomly pick from your data (to simulate random draw)
-		Assign ntrain to training set, ntest to testing set
-		'''
+def getRandomSample(ntrain, ntest):
+	'''
+	Get a bunch of data from db.
+	Randomly pick from your data (to simulate random draw)
+	Assign ntrain to training set, ntest to testing set
+	'''
 
-		training_ids = set()
-		testing_ids  = set()
+	training_ids = set()
+	testing_ids  = set()
 
-		training_data = []
-		testing_data  = []
+	training_data = []
+	testing_data  = []
 
-		data = getReadmes((ntrain+ntest)*10) # pick randomly from a pool 10x the total desired size
+	data = getReadmes((ntrain+ntest)*10) # pick randomly from a pool 10x the total desired size
 
-		while (len(training_data) < ntrain):
-			testidx = random.randint(0,len(data)-1)
-			if (testidx in training_ids or testidx in testing_ids):
-				continue
-			training_data.append(data[testidx])
-			training_ids.add(testidx)
+	while (len(training_data) < ntrain):
+		testidx = random.randint(0,len(data)-1)
+		if (testidx in training_ids or testidx in testing_ids):
+			continue
+		training_data.append(data[testidx])
+		training_ids.add(testidx)
 
-		while (len(testing_data) < ntest):
-			testidx = random.randint(0,len(data)-1)
-			if (testidx in training_ids or testidx in testing_ids):
-				continue
-			testing_data.append(data[testidx])
-			testing_ids.add(testidx)
+	while (len(testing_data) < ntest):
+		testidx = random.randint(0,len(data)-1)
+		if (testidx in training_ids or testidx in testing_ids):
+			continue
+		testing_data.append(data[testidx])
+		testing_ids.add(testidx)
 
-		return (training_data, testing_data)
-
-
-
-    def main(argv=None):
-    	'''
-    	Runs a naive baseline classifier
-    	'''
-	    if argv is None:
-	        argv = sys.argv
-
-	    n_training_samples = DEFAULT_TRAINING_NUM
-	    n_testing_samples  = DEFAULT_TESTING_NUM
-	    if len(argv) >= 3:
-	    	n_training_samples = argv[2]
-	    	n_testing_samples  = argv[3]
-	    else:
-	    	print('\nUsing default number for train ({}), test ({})'.format(n_training_samples, n_testing_samples))
-
-	    readme_data = getReadmes(n_training_samples+n_testing_samples)
-
-	    trainExamples, testExamples = getRandomSample(n_training_samples, n_testing_samples)
-
-	    if (len(trainExamples) + len(testExamples) != n_testing_samples + n_training_samples):
-	    	print('\nDid not get back the expected number of database rows! \
-	    		   \nInstead, returning {} training exs and {} testing exs'.format(len(trainExamples), len(testExamples)))
-
-	    if (DEBUG_VERBOSITY > 2):
-	    	print('Training on {} readmes, then testing on {}'.format(n_training_samples, n_testing_samples))
-
-	    featureExtractor = extractWordFeatures
-	    weights = learnPredictor(trainExamples, testExamples, featureExtractor)
+	return (training_data, testing_data)
 
 
-	if __name__ == "__main__":
-		sys.exit(main())
+
+def main(argv=None):
+	'''
+	Runs a naive baseline classifier
+	'''
+    if argv is None:
+        argv = sys.argv
+
+    n_training_samples = DEFAULT_TRAINING_NUM
+    n_testing_samples  = DEFAULT_TESTING_NUM
+    if len(argv) >= 3:
+    	n_training_samples = argv[2]
+    	n_testing_samples  = argv[3]
+    else:
+    	print('\nUsing default number for train ({}), test ({})'.format(n_training_samples, n_testing_samples))
+
+    readme_data = getReadmes(n_training_samples+n_testing_samples)
+
+    trainExamples, testExamples = getRandomSample(n_training_samples, n_testing_samples)
+
+    if (len(trainExamples) + len(testExamples) != n_testing_samples + n_training_samples):
+    	print('\nDid not get back the expected number of database rows! \
+    		   \nInstead, returning {} training exs and {} testing exs'.format(len(trainExamples), len(testExamples)))
+
+    if (DEBUG_VERBOSITY > 2):
+    	print('Training on {} readmes, then testing on {}'.format(n_training_samples, n_testing_samples))
+
+    featureExtractor = extractWordFeatures
+    weights = learnPredictor(trainExamples, testExamples, featureExtractor)
+
+
+if __name__ == "__main__":
+	sys.exit(main())
 
