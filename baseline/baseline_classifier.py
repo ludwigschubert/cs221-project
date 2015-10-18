@@ -72,7 +72,7 @@ def learnPredictor(trainExamples, testExamples, featureExtractor):
     	'''
     	Make connection to postgres server and get num readme entries
 
-    	We want to return a list of lists [[readme_text, stars, ...], [readme_text, stars, ...], ...]
+    	We want to return a list of lists [[id, readme_text, stars, ...], [id, readme_text, stars, ...], ...]
     	'''
     	try:
 		    conn=psycopg2.connect("dbname='foo' user='dbuser' password='mypass'")
@@ -82,7 +82,7 @@ def learnPredictor(trainExamples, testExamples, featureExtractor):
 		cur = conn.cursor()
 		try:
 			#TODO: do we want a specific subset? Will this be repeatable?
-		    cur.execute('SELECT readme_text, star from bar LIMIT {}'.format(num))
+		    cur.execute('SELECT id, readme_text, star from bar LIMIT {}'.format(num))
 		except:
 		    print "I can't SELECT from bar"
 
@@ -94,6 +94,38 @@ def learnPredictor(trainExamples, testExamples, featureExtractor):
 			    print "   ", row[1]
 
 		return rows # should be in correct form
+
+	def getRandomSample(ntrain, ntest):
+		'''
+		Get a bunch of data from db.
+		Randomly pick from your data (to simulate random draw)
+		Assign ntrain to training set, ntest to testing set
+		'''
+
+		training_ids = set()
+		testing_ids  = set()
+
+		training_data = []
+		testing_data  = []
+
+		data = getReadmes((ntrain+ntest)*10) # pick randomly from a pool 10x the total desired size
+
+		while (len(training_data) < ntrain):
+			testidx = random.randint(0,len(data)-1)
+			if (testidx in training_ids or testidx in testing_ids):
+				continue
+			training_data.append(data[testidx])
+			training_ids.add(testidx)
+
+		while (len(testing_data) < ntest):
+			testidx = random.randint(0,len(data)-1)
+			if (testidx in training_ids or testidx in testing_ids):
+				continue
+			testing_data.append(data[testidx])
+			testing_ids.add(testidx)
+
+		return (training_data, testing_data)
+
 
 
     def main(argv=None):
@@ -113,11 +145,11 @@ def learnPredictor(trainExamples, testExamples, featureExtractor):
 
 	    readme_data = getReadmes(n_training_samples+n_testing_samples)
 
-	    if (len(readme_data) != n_testing_samples + n_training_samples):
-	    	print('\nDid not get back the expected number of database rows!!')
+	    trainExamples, testExamples = getRandomSample(n_training_samples, n_testing_samples)
 
-	    trainExamples = readme_data[:n_training_samples] # get from DB
-	    testExamples = readme_data[n_training_samples:] # get from DB
+	    if (len(trainExamples) + len(testExamples) != n_testing_samples + n_training_samples):
+	    	print('\nDid not get back the expected number of database rows! \
+	    		   \nInstead, returning {} training exs and {} testing exs'.format(len(trainExamples), len(testExamples)))
 
 	    if (DEBUG_VERBOSITY > 2):
 	    	print('Training on {} readmes, then testing on {}'.format(n_training_samples, n_testing_samples))
@@ -128,3 +160,4 @@ def learnPredictor(trainExamples, testExamples, featureExtractor):
 
 	if __name__ == "__main__":
 		sys.exit(main())
+
