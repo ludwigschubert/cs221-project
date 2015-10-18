@@ -41,9 +41,8 @@ def evaluatePredictor(examples, predictor):
     of misclassiied examples.
     '''
     error = 0
-    for x, y in examples:
-        if predictor(x) != y:
-            error += 1
+    for _, x, y in examples:
+        error += abs(predictor(x) - y)
     return 1.0 * error / len(examples)
 
 def outputWeights(weights, path):
