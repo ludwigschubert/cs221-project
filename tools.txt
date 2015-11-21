@@ -1,1 +1,12 @@
+https://www.quora.com/How-do-I-perform-data-analysis-machine-learning-in-Python
+
+Analytics platform: 
+https://www.continuum.io/downloads
+
+Leveraging:
+http://pandas.pydata.org/
 http://scikit-learn.org/stable/
+
+"You will use Pandas, Scipy and Numpy for data manipulation.  scikit/learn for actual machine learning"
+
+Lasso, etc: add weight variables by their correlation to the end regression, enabling a smarter way to not overfit. 

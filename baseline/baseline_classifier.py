@@ -11,13 +11,49 @@ import copy
 from collections import Counter
 from util import *
 import psycopg2
+from bs4 import BeautifulSoup
+from sklearn import linear_model
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn_pandas import DataFrameMapper
+import sklearn.metrics
 
-DEBUG_VERBOSITY = 2
+DEBUG_VERBOSITY = 0
 DEFAULT_TRAINING_NUM = 10
 DEFAULT_TESTING_NUM	= 10
 
 ETA = 1
 NUM_ITERS = 20
+
+def getCorpus(readmeHTMLs):
+	corpus = []
+	for readme in readmeHTMLs:
+		corpus.append(BeautifulSoup(readme, 'html.parser').get_text())
+	return corpus
+
+def getVectorizedCorpus(corpus):
+	bigram_vectorizer = CountVectorizer(ngram_range=(3, 3), token_pattern=r'\b\w+\b', min_df=1)
+	vec = bigram_vectorizer.fit_transform(corpus).toarray()
+	return bigram_vectorizer, vec
+
+def trainOnModel(vectorizedCorpus, scores, model):
+	return model.fit(vectorizedCorpus, scores)
+
+# def main(argv=None):
+	# corpus = [
+	# 'this is a test',
+	# 'pig pig pig chicken test'
+	# ]
+	# scores = [0, 1]
+	# clf = linear_model.LinearRegression()
+
+	# bg_vectorizer, vec = getVectorizedCorpus(corpus)
+	# model = trainOnModel(vec, scores, clf)
+	# print bg_vectorizer
+	# print bg_vectorizer.get_feature_names()
+	# print vec
+	# print model
+	# print model.coef_
+
 
 def extractWordFeatures(x):
 	"""
@@ -30,7 +66,8 @@ def extractWordFeatures(x):
 	Example: "I am what I am" --> {'I': 2, 'am': 2, 'what': 1}
 	"""
 	retval = collections.defaultdict(lambda: 0.0)
-	for word in x.split():
+	text = BeautifulSoup(x, 'html.parser').get_text()
+	for word in text.split():
 		retval[word] = retval[word] + 1.0
 	return retval
 	
@@ -99,14 +136,14 @@ def learnPredictor(trainExamples, testExamples, featureExtractor):
 		for github_id, example, label in trainExamples:
 			loss = gradientSquaredLoss(example, label, weights)
 			increment(weights, -stepSize, loss)
-			print github_id
-			print loss
-			print score(example, label)
-		print("====")
+			# print github_id
+			# print loss
+			# print score(example, label)
+		#print("====")
 		# print("Iteration: %s" % i)
-		print("Train Examples: %s" % evaluatePredictor(trainExamples, predict))
-		print("Test Examples: %s" % evaluatePredictor(testExamples, predict))
-		print 'Weights %s', Counter(weights).most_common()[0:10]
+		#print("Train Examples: %s" % evaluatePredictor(trainExamples, predict))
+		#print("Test Examples: %s" % evaluatePredictor(testExamples, predict))
+		#print 'Weights %s', Counter(weights).most_common()[0:10]
 		# print 'Training error on iteration {0:g}:	{1:f}'.format(i, evaluatePredictor(trainExamples, predictor))
 		# print 'Testing error on iteration {0:g}:	{1:f}'.format(i, evaluatePredictor(testExamples,	predictor))
 	
@@ -120,14 +157,14 @@ def getReadmes(num):
 	We want to return a list of lists [[id, readme_text, stars, ...], [id, readme_text, stars, ...], ...]
 	'''
 	try:
-		conn=psycopg2.connect("dbname='data-collector_development'") # user='dbuser' password='mypass'")
+		conn=psycopg2.connect("dbname='data-collector_development' user='friedemann'") # user='dbuser' password='mypass'")
 	except:
 		print "I am unable to connect to the database."
 
 	cur = conn.cursor()
 	try:
 		#TODO: do we want a specific subset? Will this be repeatable?
-		cur.execute('SELECT id, readme_html, stargazers_count FROM repositories WHERE repositories.readme_html IS NOT NULL LIMIT {}'.format(num))
+		cur.execute('SELECT id, readme_html, stargazers_count FROM repositories WHERE repositories.readme_html IS NOT NULL AND repositories.stargazers_count IS NOT NULL LIMIT {}'.format(num))
 	except:
 		print "I can't SELECT from repositories"
 
@@ -171,7 +208,19 @@ def getRandomSample(ntrain, ntest):
 	# print("Training Data has %s items, testing data ahs %s items" %)
 	return (training_data, testing_data)
 
-
+def evaluatePredictor(examples, scores, vectorizer, clf):
+    '''
+    predictor: a function that takes an x and returns a predicted y.
+    Given a list of examples (x, y), makes predictions based on |predict| and returns the fraction
+    of misclassiied examples.
+    '''
+    error = 0
+    # for _, x, y in examples:
+    for i in range(examples):
+    	ex_vec = vectorizer.transform(examples[i])
+    	y_pred = clf.predict(ex_vec)
+        error += sklearn.mean_squared_error(scores[i], y_pred)
+    return 1.0 * error / len(examples)
 
 def main(argv=None):
 	'''
@@ -182,9 +231,10 @@ def main(argv=None):
 
 	n_training_samples = DEFAULT_TRAINING_NUM
 	n_testing_samples	= DEFAULT_TESTING_NUM
+	print argv
 	if len(argv) >= 3:
-		n_training_samples = argv[2]
-		n_testing_samples	= argv[3]
+		n_training_samples = int(argv[1])
+		n_testing_samples	= int(argv[2])
 	else:
 		print('\nUsing default number for train ({}), test ({})'.format(n_training_samples, n_testing_samples))
 
@@ -198,10 +248,40 @@ def main(argv=None):
 
 	if (DEBUG_VERBOSITY > 1):
 		print('Training on {} readmes, then testing on {}'.format(n_training_samples, n_testing_samples))
-	trainExamples = [tuple(value / 100000.0 if index == 2 else value for index, value in enumerate(repo)) for repo in trainExamples]
-	testExamples  = [tuple(value / 100000.0 if index == 2 else value for index, value in enumerate(repo)) for repo in testExamples]
-	featureExtractor = extractWordFeatures
-	weights = learnPredictor(trainExamples, testExamples, featureExtractor)
+	trainExamples = [tuple(value if index == 2 else value for index, value in enumerate(repo)) for repo in trainExamples]
+	testExamples  = [tuple(value if index == 2 else value for index, value in enumerate(repo)) for repo in testExamples]
+	
+	trainingHTML = [trainExample[1] for trainExample in trainExamples]
+	trainingScores = [trainExample[2] for trainExample in trainExamples]
+
+	testingHTML = [testExample[1] for testExample in testExamples]
+	testScores = [testExample[2] for testExample in testExamples]
+
+	trainingCorpus = getCorpus(trainingHTML)
+	bg_vectorizer, vec = getVectorizedCorpus(trainingCorpus)
+
+	# clf = linear_model.LinearRegression()
+	clf = linear_model.Lasso(max_iter=8000, tol=0.01)
+	model = trainOnModel(vec, trainingScores, clf)
+
+	y_pred = clf.predict(vec)
+	print sklearn.metrics.mean_absolute_error(trainingScores, y_pred)
+
+	testCorpus = getCorpus(testingHTML)
+	vectes = bg_vectorizer.transform(testCorpus)
+	y_predtes = clf.predict(vectes)
+	print sklearn.metrics.mean_absolute_error(testScores, y_predtes)
+
+	# print bg_vectorizer
+	# print bg_vectorizer.get_feature_names()
+	# print vec
+	# print model
+	# print model.coef_
+
+	# evaluatePredictor(trainingCorpus, trainingScores, bg_vectorizer, clf)
+
+	# featureExtractor = extractWordFeatures
+	# weights = learnPredictor(trainExamples, testExamples, featureExtractor)
 
 
 if __name__ == "__main__":
