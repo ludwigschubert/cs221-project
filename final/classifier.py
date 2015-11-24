@@ -145,7 +145,7 @@ def main(argv=None):
 		argv = sys.argv
 
 	n_training_samples = DEFAULT_TRAINING_NUM
-	n_testing_samples	= DEFAULT_TESTING_NUM
+	n_testing_samples  = DEFAULT_TESTING_NUM
 
 	if len(argv) >= 3:
 		n_training_samples = int(argv[1])
