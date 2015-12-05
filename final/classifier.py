@@ -16,6 +16,9 @@ from sklearn import linear_model
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn_pandas import DataFrameMapper
 import sklearn.metrics
+from nltk import word_tokenize     
+from nltk.stem import WordNetLemmatizer 
+
 
 DEBUG_VERBOSITY = 0
 DEFAULT_TRAINING_NUM = 500
@@ -23,6 +26,12 @@ DEFAULT_TESTING_NUM	= 50
 
 MAX_ITERS = 8000
 TOLERANCE = 0.01
+
+class LemmaTokenizer(object):
+	def __init__(self):
+		self.wnl = WordNetLemmatizer()
+	def __call__(self, doc):
+		return [self.wnl.lemmatize(t) for t in word_tokenize(doc)]
 
 def getCorpus(readmeHTMLs):
 	corpus = []
@@ -37,7 +46,7 @@ def getBigramVectorizedCorpus(corpus):
 
 def getTfidfBigramVectorizedCorpus(corpus):
 	tfidf_bigram_vectorizer = TfidfVectorizer(input='content', encoding='utf-8', decode_error='strict', \
-								strip_accents=None, lowercase=True, preprocessor=None, tokenizer=None, \
+								strip_accents=None, lowercase=True, preprocessor=None, tokenizer=LemmaTokenizer(), \
 								analyzer='word', stop_words='english', token_pattern=r'\b\w+\b', ngram_range=(2, 2), 
 								max_df=1.0, min_df=1, max_features=None, vocabulary=None, binary=False, \
 								norm='l2', use_idf=True, smooth_idf=True, sublinear_tf=False)
@@ -181,7 +190,7 @@ def main(argv=None):
 	bg_vectorizer, vec = corpusVectorizer(trainingCorpus)
 
 	# clf = linear_model.LinearRegression()
-	clf = linear_model.Lasso(max_iter=MAX_ITERS, tol=TOLERANCE)
+	clf = linear_model.LogisticRegression(penalty= 'l2')
 	model = trainOnModel(vec, trainingScores, clf)
 
 	y_pred = clf.predict(vec)
