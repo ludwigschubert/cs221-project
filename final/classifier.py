@@ -11,6 +11,7 @@ import copy
 from collections import Counter
 from util import *
 import psycopg2
+import numpy as np
 from bs4 import BeautifulSoup
 from sklearn import linear_model
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
@@ -43,6 +44,7 @@ def getBigramVectorizedCorpus(corpus):
 	bigram_vectorizer = CountVectorizer(ngram_range=(2, 2), token_pattern=r'\b\w+\b', min_df=1)
 	vec = bigram_vectorizer.fit_transform(corpus).toarray()
 	return bigram_vectorizer, vec
+
 
 def getTfidfBigramVectorizedCorpus(corpus):
 	tfidf_bigram_vectorizer = TfidfVectorizer(input='content', encoding='utf-8', decode_error='strict', \
