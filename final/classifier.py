@@ -17,8 +17,8 @@ from sklearn import linear_model
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn_pandas import DataFrameMapper
 import sklearn.metrics
-from nltk import word_tokenize     
-from nltk.stem import WordNetLemmatizer 
+from nltk import word_tokenize
+from nltk.stem import WordNetLemmatizer
 
 
 DEBUG_VERBOSITY = 0
@@ -34,36 +34,81 @@ class LemmaTokenizer(object):
 	def __call__(self, doc):
 		return [self.wnl.lemmatize(t) for t in word_tokenize(doc)]
 
-def getCorpus(readmeHTMLs):
-	corpus = []
-	for readme in readmeHTMLs:
-		corpus.append(BeautifulSoup(readme, 'html.parser').get_text())
-	return corpus
+# Class: FeatureExtractor
+# ---------------------
+# Abstract Feature Extractor
+# You should use feature extractors to encapsulate dependencies and state
+class FeatureExtractor(object):
 
-def getBigramVectorizedCorpus(corpus):
-	bigram_vectorizer = CountVectorizer(ngram_range=(2, 2), token_pattern=r'\b\w+\b', min_df=1)
-	vec = bigram_vectorizer.fit_transform(corpus).toarray()
-	return bigram_vectorizer, vec
+	# The training flag can be used if your extraction depends on internal state
+	# e.g. a vectorizer
+	# Returns: a numpy array.
+	def extract(self, samples, training = True):
+		pass
 
 
-def getTfidfBigramVectorizedCorpus(corpus):
-	tfidf_bigram_vectorizer = TfidfVectorizer(input='content', encoding='utf-8', decode_error='strict', \
-								strip_accents=None, lowercase=True, preprocessor=None, tokenizer=LemmaTokenizer(), \
-								analyzer='word', stop_words='english', token_pattern=r'\b\w+\b', ngram_range=(2, 2), 
-								max_df=1.0, min_df=1, max_features=None, vocabulary=None, binary=False, \
-								norm='l2', use_idf=True, smooth_idf=True, sublinear_tf=False)
-	vec = tfidf_bigram_vectorizer.fit_transform(corpus).toarray()
-	return tfidf_bigram_vectorizer, vec
+class StatelessFeatureExtractor(FeatureExtractor):
 
-def trainOnModel(vectorizedCorpus, scores, model):
-	return model.fit(vectorizedCorpus, scores)
+	def extract(self, samples, _):
+		return np.array([ [self.extractFromSingleSample(sample)] for sample in samples ])
+
+	def extractFromSingleSample(self, sample):
+		pass
+
+
+class LengthFeatureExtractor(StatelessFeatureExtractor):
+
+	def extractFromSingleSample(self, sample):
+		return len(sample)
+
+
+class NGramFeatureExtractor(FeatureExtractor):
+
+	def getBigramVectorizedCorpus(self, corpus):
+		bigram_vectorizer = CountVectorizer(ngram_range=(2, 2), token_pattern=r'\b\w+\b', min_df=1)
+		vec = bigram_vectorizer.fit_transform(corpus).toarray()
+		return bigram_vectorizer, vec
+
+	def getTfidfBigramVectorizedCorpus(self, corpus):
+		tfidf_bigram_vectorizer = TfidfVectorizer(input='content', encoding='utf-8', decode_error='strict', \
+									strip_accents=None, lowercase=True, preprocessor=None, tokenizer=LemmaTokenizer(), \
+									analyzer='word', stop_words='english', token_pattern=r'\b\w+\b', ngram_range=(2, 2),
+									max_df=1.0, min_df=1, max_features=None, vocabulary=None, binary=False, \
+									norm='l2', use_idf=True, smooth_idf=True, sublinear_tf=False)
+		vec = tfidf_bigram_vectorizer.fit_transform(corpus).toarray()
+		return tfidf_bigram_vectorizer, vec
+
+	def __init__(self):
+		# Choose vectorizer here
+		self.corpusVectorizer = self.getTfidfBigramVectorizedCorpus
+		# self.corpusVectorizer = self.getBigramVectorizedCorpus # same as getVectorizedCorpus used for progress report
+		self.vectorizer = None
+
+	def getCorpus(self, readmeHTMLs):
+		corpus = []
+		for readme in readmeHTMLs:
+			text = BeautifulSoup(readme, 'html.parser').get_text()
+			corpus.append(text)
+		return corpus
+
+	def extract(self, samples, training):
+		corpus = self.getCorpus(samples)
+		assert len(corpus) == len(samples)
+		if training:
+			vectorizer, vectors = self.corpusVectorizer(corpus)
+			self.vectorizer = vectorizer
+		else:
+			assert self.vectorizer
+			vectors = self.vectorizer.transform(corpus).toarray()
+		assert len(vectors) == len(samples)
+		return vectors
 
 def extractWordFeatures(x):
 	"""
 	Extract word features for a string x. Words are delimited by
 	whitespace characters only.
 	BeautifulSoup removes extraneous HTML markup.
-	@param string x: 
+	@param string x:
 	@return dict: feature vector representation of x.
 	Example: "<h1>I am what I am</h1>" --> {'I': 2, 'am': 2, 'what': 1}
 	"""
@@ -72,7 +117,7 @@ def extractWordFeatures(x):
 	for word in text.split():
 		retval[word] = retval[word] + 1.0
 	return retval
-	
+
 def extractLengthFeature(x):
 	length = len(x)
 	log = math.log(length**2, 10)
@@ -148,6 +193,64 @@ def evaluatePredictor(examples, scores, vectorizer, clf):
         error += sklearn.mean_squared_error(scores[i], y_pred)
     return 1.0 * error / len(examples)
 
+class Regression(object):
+
+	def __init__(self, numberOfTrainingSamples, numberOfTestSamples):
+		self.numberOfTrainingSamples = numberOfTrainingSamples
+		self.numberOfTestSamples = numberOfTestSamples
+		self.featureExtractorClasses = [
+			LengthFeatureExtractor,
+			NGramFeatureExtractor
+		]
+		self.featureExtractors = [extractorClass() for extractorClass in self.featureExtractorClasses]
+
+	def run(self):
+		trainExamples, testExamples = getRandomSample(self.numberOfTrainingSamples, self.numberOfTestSamples)
+
+		if (len(trainExamples) + len(testExamples) != self.numberOfTestSamples + self.numberOfTrainingSamples):
+			print('\nDid not get back the expected number of database rows! \
+					\nInstead, returning {} training exs and {} testing exs'.format(len(trainExamples), len(testExamples)))
+
+		if (DEBUG_VERBOSITY > 1):
+			print('Training on {} readmes, then testing on {}'.format(self.numberOfTrainingSamples, self.numberOfTestSamples))
+
+		trainExamples = [tuple(value for value in repo) for repo in trainExamples]
+		testExamples  = [tuple(value for value in repo) for repo in testExamples]
+
+		trainingHTML = [trainExample[1] for trainExample in trainExamples]
+		trainingScores = [trainExample[2] for trainExample in trainExamples]
+
+		testHTML = [testExample[1] for testExample in testExamples]
+		testScores = [testExample[2] for testExample in testExamples]
+
+		def featureExtraction(samples, isTraining):
+			featureListsPerSample = []
+			for featureExtractor in self.featureExtractors:
+				features = featureExtractor.extract(samples, isTraining)
+				featureListsPerSample.append(features)
+			featuresOfSamples = np.concatenate(featureListsPerSample, axis=1)
+			return featuresOfSamples
+
+
+		# Train the model
+		model = linear_model.LogisticRegression(penalty = 'l2')
+		trainingFeatures = featureExtraction(trainingHTML, isTraining = True)
+		model.fit(trainingFeatures, trainingScores)
+
+		# Calculate training error
+		trainingPrediction = model.predict(trainingFeatures)
+		trainingError = sklearn.metrics.mean_absolute_error(trainingScores, trainingPrediction)
+		print "Training Error (mean absolute): {error}".format(error = trainingError)
+
+		# Calculate test error
+		testFeatures = featureExtraction(testHTML, isTraining = False)
+		testPrediction = model.predict(testFeatures)
+		testError = sklearn.metrics.mean_absolute_error(testScores, testPrediction)
+		print "Test Error (mean absolute): {error}".format(error = testError)
+
+
+
+
 def main(argv=None):
 	'''
 	Runs a mega-super-awesome classifier
@@ -164,44 +267,8 @@ def main(argv=None):
 	else:
 		print('\nUsing default number for train ({}), test ({})'.format(n_training_samples, n_testing_samples))
 
-	trainExamples, testExamples = getRandomSample(n_training_samples, n_testing_samples)
-
-	if (len(trainExamples) + len(testExamples) != n_testing_samples + n_training_samples):
-		print('\nDid not get back the expected number of database rows! \
-				\nInstead, returning {} training exs and {} testing exs'.format(len(trainExamples), len(testExamples)))
-
-	if (DEBUG_VERBOSITY > 1):
-		print('Training on {} readmes, then testing on {}'.format(n_training_samples, n_testing_samples))
-
-	trainExamples = [tuple(value for value in repo) for repo in trainExamples]
-	testExamples  = [tuple(value for value in repo) for repo in testExamples]
-	
-	trainingHTML = [trainExample[1] for trainExample in trainExamples]
-	trainingScores = [trainExample[2] for trainExample in trainExamples]
-
-	testingHTML = [testExample[1] for testExample in testExamples]
-	testScores = [testExample[2] for testExample in testExamples]
-
-	trainingCorpus = getCorpus(trainingHTML)
-
-	## -- Choose vectorizer here -- ##
-	corpusVectorizer = getTfidfBigramVectorizedCorpus
-	# corpusVectorizer = getBigramVectorizedCorpus # same as getVectorizedCorpus used for progress report
-	## -- End vectorizer options -- ##
-
-	bg_vectorizer, vec = corpusVectorizer(trainingCorpus)
-
-	# clf = linear_model.LinearRegression()
-	clf = linear_model.LogisticRegression(penalty= 'l2')
-	model = trainOnModel(vec, trainingScores, clf)
-
-	y_pred = clf.predict(vec)
-	print sklearn.metrics.mean_absolute_error(trainingScores, y_pred)
-
-	testCorpus = getCorpus(testingHTML)
-	vectes = bg_vectorizer.transform(testCorpus)
-	y_predtes = clf.predict(vectes)
-	print sklearn.metrics.mean_absolute_error(testScores, y_predtes)
+	regression = Regression(n_training_samples, n_testing_samples)
+	regression.run()
 
 if __name__ == "__main__":
 	sys.exit(main())
