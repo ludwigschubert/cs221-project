@@ -103,27 +103,6 @@ class NGramFeatureExtractor(FeatureExtractor):
 		assert len(vectors) == len(samples)
 		return vectors
 
-def extractWordFeatures(x):
-	"""
-	Extract word features for a string x. Words are delimited by
-	whitespace characters only.
-	BeautifulSoup removes extraneous HTML markup.
-	@param string x:
-	@return dict: feature vector representation of x.
-	Example: "<h1>I am what I am</h1>" --> {'I': 2, 'am': 2, 'what': 1}
-	"""
-	retval = collections.defaultdict(lambda: 0.0)
-	text = BeautifulSoup(x, 'html.parser').get_text()
-	for word in text.split():
-		retval[word] = retval[word] + 1.0
-	return retval
-
-def extractLengthFeature(x):
-	length = len(x)
-	log = math.log(length**2, 10)
-	key = 'order_of_length_{0:g}'.format( math.floor(log))
-	return {key: 1}
-
 def getReadmes(num):
 	"""
 	Make connection to postgres server and get num readme entries
@@ -179,19 +158,6 @@ def getRandomSample(ntrain, ntest):
 		testing_data.append(data[testidx])
 		testing_ids.add(testidx)
 	return (training_data, testing_data)
-
-def evaluatePredictor(examples, scores, vectorizer, clf):
-    """
-    predictor: a function that takes an x and returns a predicted y.
-    Given a list of examples (x, y), makes predictions based on |predict| and returns the fraction
-    of misclassiied examples.
-    """
-    error = 0
-    for i in range(examples):
-    	ex_vec = vectorizer.transform(examples[i])
-    	y_pred = clf.predict(ex_vec)
-        error += sklearn.mean_squared_error(scores[i], y_pred)
-    return 1.0 * error / len(examples)
 
 class Regression(object):
 
