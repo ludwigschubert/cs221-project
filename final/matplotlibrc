@@ -1,0 +1,2 @@
+text.usetex         : True
+text.latex.preamble : \usepackage[osf]{fbb},\usepackage[cal=boondoxo]{mathalfa},\usepackage[libertine]{newtxmath}
